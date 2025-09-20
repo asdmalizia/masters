@@ -1,6 +1,6 @@
 ---
-title: "Lista 1"
-subtitle: "Score Driven Models"
+title: "Score Driven Models - Lista 1"
+subtitle: "Prof. Cristiano Fernandes"
 author: "Alessandra Malizia"
 date: "Setembro 2025"
 
@@ -17,31 +17,72 @@ lot: false       # lista de tabelas
 
 # Questão 1
 
+
+$$
+\begin{align*}
+y_{t|t-1} &= \sigma_{t|t-1} \cdot \epsilon_t \quad \epsilon_t \sim t(0, 1, \nu) \\
+\sigma^2_{t|t-1} &= \omega + \alpha y_t^2
+\end{align*}
+$$
+
+
+
 ## Item a) Momentos condicionais
+![](img/1a.jpg)
 
 
 ## Item b) Distribuição condicional
 
-## Item c) Momentos incondicionais
+![](img/1b.jpg)
 
 
+## Item c) Momentos incondicionais [INCOMPLETE]
 
-## Item d) Distribuição incondicional
+![](img/1ci.jpg)
+![](img/1cii.jpg)
+![](img/1ciii.jpg)
+
+## Item d) Distribuição incondicional [TODO]
 
 ## Item e) Correlações
 ### i) Linear
-### ii) Quadrática
+
+![](img/1ei.jpg)
+
+### ii) Quadrática [TODO]
 
 ## Item f) Momentos da distribuição preditiva
-### i) Valor esperado
-### ii) Variância
 
-## Item g) Distribuição preditiva
+![](img/1f.jpg)
 
-## Item h) Simulação
+## Item g) Distribuição preditiva [TODO]
+
+## Item h) Simulação [TODO]
 
 ## Item i) Log verossimilhança
 
-## Item j) Retornos diários
+![](img/1i.jpg)
+
+
+## Item j) Retornos diários [TODO]
 
 # Questão 2
+## item a) $  y_t = g_{t|t-1} + \epsilon_t$ 
+### i) $ \epsilon_t \sim  Gamma(\mu,\theta)$
+![](img/2ai.jpg)
+
+### ii) $ \epsilon_t \sim  Poisson(\lambda)$
+![](img/2aii.jpg)
+
+### iii) $ \epsilon_t \sim  Beta(\alpha, \beta)$ [TODO]
+
+## item b) $  y_t = g_{t|t-1} \cdot \epsilon_t$ 
+### i) $ \epsilon_t \sim  Exp(\lambda)$
+
+![](img/2bi.jpg)
+
+### ii) $ \epsilon_t \sim  Gamma(\mu, \theta)$
+![](img/2bii.jpg)
+
+### iii) $ \epsilon_t \sim  Poisson(\lambda)$
+![](img/2biii.jpg)
