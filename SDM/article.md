@@ -21,7 +21,7 @@ lot: false       # lista de tabelas
 $$
 \begin{align*}
 y_{t|t-1} &= \sigma_{t|t-1} \cdot \epsilon_t \quad \epsilon_t \sim t(0, 1, \nu) \\
-\sigma^2_{t|t-1} &= \omega + \alpha y_t^2
+\sigma^2_{t+1|t} &= \omega + \alpha y_t^2
 \end{align*}
 $$
 
@@ -29,27 +29,34 @@ $$
 
 ## Item a) Momentos condicionais
 ![](img/1a.jpg)
+   
 
+$$
+\frac{(k\omega^2+2k\alpha\omega(\nu\omega/(\nu(1-\alpha)-2)))}{1-k\alpha^2}
+$$
 
 ## Item b) Distribuição condicional
 
 ![](img/1b.jpg)
 
 
-## Item c) Momentos incondicionais [INCOMPLETE]
+## Item c) Momentos incondicionais
 
 ![](img/1ci.jpg)
 ![](img/1cii.jpg)
 ![](img/1ciii.jpg)
+![](img/1civ.jpg)
+![](img/1cv.jpg)
 
 ## Item d) Distribuição incondicional [TODO]
 
 ## Item e) Correlações
 ### i) Linear
-
 ![](img/1ei.jpg)
 
-### ii) Quadrática [TODO]
+### ii) Quadrática
+![](img/1eii.jpg)
+![](img/1eiii.jpg)
 
 ## Item f) Momentos da distribuição preditiva
 
@@ -74,7 +81,8 @@ $$
 ### ii) $ \epsilon_t \sim  Poisson(\lambda)$
 ![](img/2aii.jpg)
 
-### iii) $ \epsilon_t \sim  Beta(\alpha, \beta)$ [TODO]
+### iii) $ \epsilon_t \sim  Beta(\alpha, \beta)$
+![](img/2aiii.jpg)
 
 ## item b) $  y_t = g_{t|t-1} \cdot \epsilon_t$ 
 ### i) $ \epsilon_t \sim  Exp(\lambda)$
