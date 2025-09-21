@@ -8,6 +8,8 @@ lang: pt-BR
 fontsize: 12pt
 geometry: margin=2cm
 
+toc: true        # gera sumário automático
+toc-depth: 2     # profundidade do sumário (até subseções)
 
 lof: false        # lista de figuras
 lot: false       # lista de tabelas
@@ -200,42 +202,35 @@ plt.savefig('C:\\Users\\aless\\Desktop\\Codes\\masters\\SDM\\img\\FAC.jpg', dpi=
 plt.show()
 
 ```
+
 # Questão 2
-## item a) Erro aditivo
-
-### i)
-
+## item a) $  y_t = g_{t|t-1} + \epsilon_t $ 
+### i) $ \epsilon_t \sim  Gamma(\mu,\theta) $
 A densidade preditiva tem a mesma forma do erro $\epsilon_t$ e segue uma distribuição Gamma generalizada, deslocada em $g_{t|t-1}$.
 
 ![](img/2ai.jpg)
 
-### ii)
-
+### ii) $ \epsilon_t \sim  Poisson(\lambda) $
 A densidade preditiva tem a forma da distribuição de Poisson do erro $\epsilon_t$, deslocada em $g_{t|t-1}$.
 
 ![](img/2aii.jpg)
 
-### iii) 
-
+### iii) $ \epsilon_t \sim  Beta(\alpha, \beta) $
 A densidade preditiva segue a mesma distribuição Beta do erro, definida em $g_{t|t-1} < y_t < g_{t|t-1} + a $.
 
 ![](img/2aiii.jpg)
 
-## item b) Erro multiplicativo
-
-### i) 
-
+## item b) $  y_t = g_{t|t-1} \cdot \epsilon_t $ 
+### i) $ \epsilon_t \sim  Exp(\lambda) $
 A densidade preditiva segue uma distribuição exponencial com $\lambda = \lambda_\epsilon/g_{t|t-1}$.
 
 ![](img/2bi.jpg)
 
-### ii) 
-
+### ii) $ \epsilon_t \sim  Gamma(\mu, \theta) $
 A densidade preditiva não pertence à mesma família da distribuição de $\epsilon_t$.
 
 ![](img/2bii.jpg)
 
-### iii) 
-
+### iii) $ \epsilon_t \sim  Poisson(\lambda) $
 A densidade preditiva não pertence à mesma família da distribuição de $\epsilon_t$.
 ![](img/2biii.jpg)
