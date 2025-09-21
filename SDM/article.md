@@ -19,24 +19,29 @@ lot: false       # lista de tabelas
 
 
 $$
-\begin{align*}
+\begin{align}
 y_{t|t-1} &= \sigma_{t|t-1} \cdot \epsilon_t \quad \epsilon_t \sim t(0, 1, \nu) \\
 \sigma^2_{t+1|t} &= \omega + \alpha y_t^2
-\end{align*}
+\end{align}
 $$
 
 
 
 ## Item a) Momentos condicionais
+A distribuição condicional é simétrica e possui valor esperado e coeficiente de simetria condicionais iguais a zero. Já a variância condicional é dada pela variância do modelo ARCH e do erro, que segue uma distribuição t-student. O coeficiente de curtose é maior que 3, indicando que a distribuição é leptocúrtica.
+
 ![](img/1a.jpg)
    
 
 ## Item b) Distribuição condicional
+A distribuição condicional é uma t generalizada com $\nu$ graus de liberdade e escala dada pela variância do modelo. A densidade possui a mesma forma da distribuição do erro, que é uma t com escala igual a 1.
 
 ![](img/1b.jpg)
 
 
 ## Item c) Momentos incondicionais
+Assim como o valor esperado e coeficiente de simetria condicionais, o valor esperado e o coeficiente de simetria incondicionais são iguais a zero.
+A variância e o coeficiente de curtose são obtidos por recursividade a partir das equações do modelo e convergem para um valor constante quando t tende a infinito e o modelo é estacionário, ou seja, $\alpha < \frac{\nu}{\nu-2}$.
 
 ![](img/1ci.jpg)
 ![](img/1cii.jpg)
@@ -44,9 +49,15 @@ $$
 ![](img/1civ.jpg)
 ![](img/1cv.jpg)
 
-## Item d) Distribuição incondicional [TODO]
+## Item d) Distribuição incondicional
+Para obter a densidade incondicional $p(y_t)$, é necessário integrar a densidade de probabilidade condicional $p(y_t|y_{t-1})$ sobre a variável $y_{t-1}$. Ao substituir recursivamente as equações do modelo na função de densidade condicional, é possível observar que a função na integral adquire uma forma complexa, que não é possível resolver analiticamente.
+
+![](img/1d.jpg)
 
 ## Item e) Correlações
+
+A correlação linear é nula, pois não há dependência linear de $y_t$ com seus lags no modelo. Já a correlação quadrática é positiva e decai com o tempo, proporcional a $\alpha^k$. Esse resultado é explicado pela presença de dependência quadrática no modelo e é determinado pela persistência da volatilidade na equação (2).
+
 ### i) Linear
 ![](img/1ei.jpg)
 
@@ -54,13 +65,21 @@ $$
 ![](img/1eii.jpg)
 ![](img/1eiii.jpg)
 
-## Item f) Momentos da distribuição preditiva
-
+## Item f) Momentos da densidade preditiva
 ![](img/1f.jpg)
 
-## Item g) Distribuição preditiva [TODO]
+## Item g) Densidade preditiva
+Para k=1, a função de densidade preditiva possui uma forma bem definida e segue uma distribuição t. 
+
+Já para k=2, é possivel obter a densidade preditiva por marginalização. Ao desenvolver o cálculo da expressão na integral, é obtida uma equação em que as densidades t são funções da escala $\sigma_{t+2|t+1}$, que por sua vez depende da variável de integração $y_{t+1}$. Dessa forma, não é possível resolver a integral para obter uma forma analítica da densidade preditiva.
+
+![](img/1g.jpg)
 
 ## Item h) Simulação
+Usando os parâmetros arbitrariamente escolhidos para satisfazer a existência de todos os momentos calculados e a condição de estacionariedade, os coeficientes de simetria amostrais obtidos foram -0.47 e 0.02 para k=3 e k=30, respectivamente. Esses valores são próximos ao valor teórico calculado e indicam que a distribuição é simétrica.
+
+Para k=3, o coeficiente de curtose obtido em t=200 foi K=21. A grande diferença do resultado obtido para o valor teórico do coeficiente de curtose do erro indica que nesse horizonte o processo possui caudas mais pesadas que uma distribuição t. Já para k=30, o coeficiente de curtose calculado foi 8.3, mais próximo da curtose de uma t(5). Esse resultado indica que em horizontes maiores a ocorrência de valores extremos é suavizada, e a distribuição tende à densidade incondicional. 
+
 ![](img/1hi.png)
 ![](img/1hii.jpg)
 
@@ -125,12 +144,17 @@ plt.show()
 
 
 ## Item j) Retornos diários
+Foi ajustado um modelo ARCH(1) com erro $\epsilon_t \sim t(0,1,\nu)$ à serie de retornos diários das ações da Apple. Foram usados dados desde Jun/2016 e variações percentuais do valor da ação.
 
+A FAC dos resíduos padronizados não possui valores significativos de autocorrelação nos lags, indicando que não há depencia linear e que o modelo capturou bem essa dinâmica da série. Já a FAC dos resíduos ao quadrado possui valores significativos e indica a existência de heterocedasticidade. 
 
+Esse resultado sugere que ainda há dependência de segunda ordem na volatilidade que não foi capturada pelo modelo, o que pode ser esperado de um modelo simples ARCH(1). Esse modelo pode ser melhorado incluindo lags da variância e estimando um ARCH(p,q).
+
+![](img/FAC_linear.jpg)
+![](img/FAC.jpg)
 ![](img/retornos.jpg)
 ![](img/output.jpg)
 ![](img/resíduos.jpg)
-![](img/FAC.jpg)
 
 
 ```bash
@@ -181,21 +205,31 @@ plt.show()
 # Questão 2
 ## item a) $  y_t = g_{t|t-1} + \epsilon_t$ 
 ### i) $ \epsilon_t \sim  Gamma(\mu,\theta)$
+A densidade preditiva tem a mesma forma do erro $\epsilon_t$ e segue uma distribuição Gamma generalizada, deslocada em $g_{t|t-1}$.
+
 ![](img/2ai.jpg)
 
 ### ii) $ \epsilon_t \sim  Poisson(\lambda)$
+A densidade preditiva tem a forma da distribuição de Poisson do erro $\epsilon_t$, deslocada em $g_{t|t-1}$.
+
 ![](img/2aii.jpg)
 
 ### iii) $ \epsilon_t \sim  Beta(\alpha, \beta)$
+A densidade preditiva segue a mesma distribuição Beta do erro, definida em $g_{t|t-1} < y_t < g_{t|t-1} + a$.
+
 ![](img/2aiii.jpg)
 
 ## item b) $  y_t = g_{t|t-1} \cdot \epsilon_t$ 
 ### i) $ \epsilon_t \sim  Exp(\lambda)$
+A densidade preditiva segue uma distribuição exponencial com $\lambda = \lambda_\epsilon/g_{t|t-1}$.
 
 ![](img/2bi.jpg)
 
 ### ii) $ \epsilon_t \sim  Gamma(\mu, \theta)$
+A densidade preditiva não pertence à mesma família da distribuição de $\epsilon_t$.
+
 ![](img/2bii.jpg)
 
 ### iii) $ \epsilon_t \sim  Poisson(\lambda)$
+A densidade preditiva não pertence à mesma família da distribuição de $\epsilon_t$.
 ![](img/2biii.jpg)
