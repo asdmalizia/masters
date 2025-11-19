@@ -38,7 +38,7 @@ $$
 ### ii) Link log
 ![](img/1bii.jpg)
 
-## Item c) Equação da média com CNO [TODO]
+## Item c) Equação da média com CNO 
 $$
 \begin{aligned}
 p(y_t|y_{t-1}) \sim NB(\mu, r) \\
@@ -48,7 +48,8 @@ h(\mu_{t+1|t}) = \tilde\mu_{t+1|t} \\
 \end{aligned}
 $$
 
-### i) Sazonalidade por dummy Herrison & Stevens
+### i) Sazonalidade por dummy Harrison & Stevens [TODO]
+
 ### ii) Sazonalidade por trigonométricos
 A tendência $m_{t+1|t}$ segue um AR(1) com drift, enquanto a sazonalidade é dada pela soma de funções trigonométricas: $\gamma_{t+1|t} = \sum_{j=1}^{6}\gamma_{j,t+1|t} $. É possível escrever as equações dessas componentes não observáveis na forma matricial abaixo.
 
@@ -92,9 +93,18 @@ m_{t|t-1} \\ \gamma_{1,t|t-1} \\ \gamma^*_{1,t|t-1} \\ \gamma_{2,t|t-1} \\ \gamm
 \end{pmatrix} +
 \begin{pmatrix}
 \kappa^m \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma\\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma
-\end{pmatrix} \tilde s_{t}
+\end{pmatrix} \tilde s_{t},
+
 
 \end{cases}
+\end{aligned}
+$$
+
+
+$$
+\begin{aligned}
+\tilde s_{t} = y_te^{-\tilde \mu_{t|t-1}}-1 \\
+\Rightarrow \tilde s_{t} = y_te^{-m_{t|t-1} + \gamma_{t|t-1}}-1
 \end{aligned}
 $$
 
@@ -113,14 +123,16 @@ $$
 
 ![](img/3.jpg)
 
-# Questão 4 [TODO]
+# Questão 4
 
 ## Item a) Parametrização e momentos da distribuição
+![](img/4ai.jpeg)
+![](img/4aii.jpeg)
 
 ## Item b) Equação dos parâmetros
-### i) GAS
-### ii) CNO
+### i) GAS [INCOMPLETE]
+### ii) CNO [TODO]
 
-## Item c) Log da verossimilhança
+## Item c) Log da verossimilhança [TODO]
 
-## Item d) Estimação do modelo
+## Item d) Estimação do modelo [TODO]
