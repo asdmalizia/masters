@@ -27,7 +27,7 @@ $$
 
 ## Item a) Parametrização e momentos da distribuição
 
-![](img/1a.jpg)
+![](img/1a.jpeg)
 
 
 ## Item b) Equação da média com GAS(p,q)
@@ -41,14 +41,15 @@ $$
 ## Item c) Equação da média com CNO 
 $$
 \begin{aligned}
-p(y_t|y_{t-1}) \sim NB(\mu, r) \\
+p(y_t|y_{t-1}) \sim NB(\mu_{t|t-1}, r) \\
 E[y_t|y_{t-1}] = \mu_{t|t-1} \\
 h(\mu_{t+1|t}) = \tilde\mu_{t+1|t} \\
 \tilde\mu_{t+1|t} = m_{t+1|t} + \gamma_{t+1|t}
 \end{aligned}
 $$
 
-### i) Sazonalidade por dummy Harrison & Stevens [TODO]
+### i) Sazonalidade por dummy Harrison & Stevens
+![](img/1ci.jpeg)
 
 ### ii) Sazonalidade por trigonométricos
 A tendência $m_{t+1|t}$ segue um AR(1) com drift, enquanto a sazonalidade é dada pela soma de funções trigonométricas: $\gamma_{t+1|t} = \sum_{j=1}^{6}\gamma_{j,t+1|t} $. É possível escrever as equações dessas componentes não observáveis na forma matricial abaixo.
@@ -93,9 +94,7 @@ m_{t|t-1} \\ \gamma_{1,t|t-1} \\ \gamma^*_{1,t|t-1} \\ \gamma_{2,t|t-1} \\ \gamm
 \end{pmatrix} +
 \begin{pmatrix}
 \kappa^m \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma\\ \kappa^\gamma \\ \kappa^\gamma \\ \kappa^\gamma
-\end{pmatrix} \tilde s_{t},
-
-
+\end{pmatrix} \tilde s_{t}, \quad \lambda_j = \frac{2\pi j}{12}
 \end{cases}
 \end{aligned}
 $$
@@ -108,11 +107,16 @@ $$
 \end{aligned}
 $$
 
-## Item d) Log da verossimilhança [TODO]
+## Item d) Log da verossimilhança
+![](img/1d.jpeg)
 
 
-# Questão 2 [todo]
+# Questão 2
+## Item a)
+![](img/2a.jpeg)
 
+## Item b)
+![](img/2b.jpeg)
 
 # Questão 3
 $$
@@ -130,9 +134,14 @@ $$
 ![](img/4aii.jpeg)
 
 ## Item b) Equação dos parâmetros
-### i) GAS [INCOMPLETE]
-### ii) CNO [TODO]
+### i) GAS 
+![](img/4bia.jpeg)
+![](img/4bib.jpeg)
+![](img/4bic.jpeg)
+### ii) CNO
+![](img/4bii.jpeg)
 
-## Item c) Log da verossimilhança [TODO]
+## Item c) Log da verossimilhança
+![](img/4c.jpeg)
 
 ## Item d) Estimação do modelo [TODO]
