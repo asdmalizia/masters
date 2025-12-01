@@ -2,7 +2,7 @@
 title: "Score Driven Models - Lista 2"
 subtitle: "Prof. Cristiano Fernandes"
 author: "Alessandra Malizia"
-date: "Outubro de 2025"
+date: "Novembro de 2025"
 
 lang: pt-BR
 fontsize: 12pt
@@ -56,6 +56,7 @@ A tendência $m_{t+1|t}$ segue um AR(1) com drift, enquanto a sazonalidade é da
 
 ![](img/formula1c.jpg)
 
+Como calculado anteriormente, a função score na forma matricial acima pode ser escrita segundo as equações abaixo.
 $$
 \begin{aligned}
 \tilde s_{t} = y_te^{-\tilde \mu_{t|t-1}}-1 \\
@@ -64,6 +65,8 @@ $$
 $$
 
 ## Item d) Log da verossimilhança
+O log da verossimilhança foi calculado anteriormente em relação aos parâmetros variáveis do modelo para o cálculo da função score. Usando os mesmos resultados e observando a função da log verossimilhança para os parâmetros fixos do modelo e suas restrições, é possível ober os resultados abaixo.
+
 ![](img/1d.jpeg)
 
 
@@ -98,10 +101,35 @@ $$
 
 ![](img/4bic.jpeg)
 
-### ii) CNO 
+### ii) CNO
+
+O parâmetro da média condicional é descrito por uma componente de tendência AR(1) e uma componente de sazonalidade por trigonométricos, confofrme equações abaixo. A função score foi calculada anteriormente. 
+
 ![](img/4bii.jpeg)
 
 ## Item c) Log da verossimilhança
 ![](img/4c.jpeg)
 
-## Item d) Estimação do modelo [TODO]
+## Item d) Estimação do modelo
+
+Paa estimar o modelo, foi usada uma série diária de armazenamento de energia na região sudeste. A série é disponibilizada em megawatts pelo Operador Nacional de Sistema Elétrico (ONS), conforme os metadados abaixo. Para obter uma série mensal, foi feita a média mensal dos dados diários.
+![](img/metadados.png)
+
+Como pode ser observado nos gráficos, a série apresenta suporte positivo e forte sazonalidade. O modelo escolhido foi a densidade condicional de Weibull com média variante no tempo e parâmetro fixo de forma.
+
+![](img/dados.png)
+
+A média condicional foi modelada por uma componente de tendência linear e sazonalidade por dummies. As componentes estimadas podem ser vistas nos resultados abaixo.
+
+![](img/componentes.png)
+![](img/estimação.png)
+
+Conforme observado nos gráficos acima e nos valores estimados, o parâmetro de atualização da sazonalidade é próximo de zero, indicando que a sazonalidade possui comportamento praticamente fixo ao longo dos anos. Já o parâmetrro de forma da distribuição de Weibull é relativamente alto, indicando uma baixa assimetria nos dados. 
+
+Nos resultados do diagnóstico abaixo, é possível observar que o modelo captou bem a dinâmica dos dados, uma vez que os resíduos padronizados apresentam baixa autocorrelação nos lags. O qq-plot e o histograma indicam uma distribuição próxima da normalidade, mas apresentam alumas observações aberrantes nas caudas. Esse resultado pode indicar a necessidade de tratamento de outliers.
+
+![](img/diagnóstico.png)
+
+O modelo estimado foi comparado com um modelo auto ARIMA na amostra de teste. O ARIMA escolhido foi o ARMA(12,1,1). O modelo score driven apresentou melhor desempenho fora da amostra em termos de RMSE e MAE, conforme tabela abaixo.
+
+![](img/forercasts.png)
