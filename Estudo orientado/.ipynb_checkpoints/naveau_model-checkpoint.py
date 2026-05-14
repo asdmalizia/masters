@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import minimize
 
 
 class NaveauModelI:
@@ -109,9 +110,7 @@ class NaveauModelI:
     # PPF (inverse CDF)
     # =========================================================
     def ppf(self, u):
-
         u = np.asarray(u)
-
         if np.any((u <= 0) | (u >= 1)):
             raise ValueError("u deve estar em (0,1)")
 
@@ -121,30 +120,72 @@ class NaveauModelI:
 
         # caso exponencial
         if np.abs(self.xi) < 1e-10:
-
             x = -self.sigma * np.log(1 - v)
-
             return x
 
         # caso xi != 0
         else:
-
             x = (
                 self.sigma / self.xi
             ) * (
                 (1 - v)**(-self.xi) - 1
             )
-
             return x
 
     # =========================================================
     # RANDOM SAMPLING
     # =========================================================
-
     def rvs(self, size=1, random_state=None):
-
         rng = np.random.default_rng(random_state)
-
         u = rng.uniform(size=size)
-
         return self.ppf(u)
+
+        
+    # =====================================================
+    # negative loglikelihood
+    # =====================================================
+    @staticmethod
+    def _negloglik(params, data, cls):
+        
+        kappa, sigma, xi = params
+        if kappa <= 0 or sigma <= 0: # restrições
+            return np.inf
+    
+        try:
+            model = cls(kappa, sigma, xi)
+            logf = model.logpdf(data)
+            
+            if np.any(~np.isfinite(logf)):
+                return np.inf
+            return -np.sum(logf)
+    
+        except Exception:
+            return np.inf
+
+    @classmethod
+    def fit(cls, data, init=(1.0, 1.0, 0.1),
+        bounds=((1e-6, None), (1e-6, None), (-1, 5)),
+        method="L-BFGS-B", return_optimizer=False):
+    
+        data = np.asarray(data)
+        # =====================================================
+        # otimização
+        # =====================================================
+        res = minimize(
+            cls._negloglik,
+            x0=init,
+            args=(data, cls),
+            method=method,
+            bounds=bounds
+        )
+    
+        # =====================================================
+        # objeto ajustado
+        # =====================================================
+        fitted_model = cls(*res.x)
+        fitted_model.optimizer = res # salva optimizer se quiser
+    
+        if return_optimizer:
+            return fitted_model, res
+        return fitted_model
+        
