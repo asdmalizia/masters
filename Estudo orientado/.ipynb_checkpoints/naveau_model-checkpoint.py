@@ -1,13 +1,12 @@
 import numpy as np
 from scipy.optimize import minimize
+import numdifftools as nd
 
 
 class NaveauModelI:
     """
     Modelo (i) de Naveau et al. (2016)
-
     F(x) = [H_xi(x/sigma)]^kappa
-
     onde H_xi é a CDF da GPD.
     """
 
@@ -111,18 +110,16 @@ class NaveauModelI:
     # =========================================================
     def ppf(self, u):
         u = np.asarray(u)
-        if np.any((u <= 0) | (u >= 1)):
+        if np.any((u < 0) | (u > 1)):
             raise ValueError("u deve estar em (0,1)")
 
         eps = np.finfo(float).eps
         u = np.clip(u, eps, 1 - eps)
         v = u**(1 / self.kappa)
-
         # caso exponencial
         if np.abs(self.xi) < 1e-10:
             x = -self.sigma * np.log(1 - v)
             return x
-
         # caso xi != 0
         else:
             x = (
@@ -162,30 +159,122 @@ class NaveauModelI:
         except Exception:
             return np.inf
 
+    @staticmethod
+    def _negloglik_censored(params, data, C, cls):
+        
+        kappa, sigma, xi = params
+        if kappa <= 0 or sigma <= 0: # restrições
+            return np.inf
+    
+        try:
+            model = cls(kappa, sigma, xi)
+            
+            ll = 0
+            # parte densidade
+            logf = model.logpdf(data[data>=C])
+            if np.any(~np.isfinite(logf)):
+                return np.inf
+            ll += np.sum(logf)
+            # parte censurada (CDF)
+            ll += np.log(model.cdf(C)) * len(data[data < C])
+            return -ll
+    
+        except Exception:
+            return np.inf
+
     @classmethod
     def fit(cls, data, init=(1.0, 1.0, 0.1),
         bounds=((1e-6, None), (1e-6, None), (-1, 5)),
-        method="L-BFGS-B", return_optimizer=False):
+        method="L-BFGS-B", return_optimizer=False,
+        censored=False, C=0.5):
     
         data = np.asarray(data)
-        # =====================================================
+        if censored:
+            objective = cls._negloglik_censored
+            args = (data, C, cls)
+        else:
+            objective = cls._negloglik
+            args = (data, cls)
+            
         # otimização
-        # =====================================================
         res = minimize(
-            cls._negloglik,
+            objective,
             x0=init,
-            args=(data, cls),
+            args=args,
             method=method,
             bounds=bounds
         )
-    
-        # =====================================================
         # objeto ajustado
-        # =====================================================
         fitted_model = cls(*res.x)
-        fitted_model.optimizer = res # salva optimizer se quiser
+        fitted_model.optimizer = res
+        fitted_model.data = data
+        fitted_model.censored = censored
+        fitted_model.C = C
     
         if return_optimizer:
             return fitted_model, res
         return fitted_model
+
+    # =====================================================
+    # STANDARD ERRORS
+    # =====================================================
+    def standard_errors(self, method="numerical", return_cov=True):
+
+        params = np.array([self.kappa, self.sigma, self.xi])
+
+        # Hessiana numérica
+        if method == "numerical":
+            H = nd.Hessian(lambda p: self._negloglik(p, self.data, self.__class__))(params) 
+            cov = np.linalg.inv(H)
+
+        # Hessiana do optimizer
+        elif method == "optimizer":
+            if not hasattr(self, "optimizer"):
+                raise ValueError(
+                    "optimizer não encontrado. "
+                    "Use fit() antes."
+                )
+            cov = np.array(self.optimizer.hess_inv.todense())
+
+        else:
+            raise ValueError(
+                "method deve ser "
+                "'numerical' ou 'optimizer'"
+            )
+
+        # erros padrão
+        se = np.sqrt(np.diag(cov))
+        if return_cov:
+            return se, cov
+        return se
+
+    # =====================================================
+    # SUMMARY
+    # =====================================================
+    def summary(self):
+
+        se_num, _ = self.standard_errors(
+            method="numerical"
+        )
+        se_opt, _ = self.standard_errors(
+            method="optimizer"
+        )
+
+        # =================================================
+        # impressão
+        # =================================================
+        # print("\n===================================")
+        # print("Naveau Model I - Fit Summary")
+        # print("===================================\n")
+        print("kappa = {:.2f} (SE num = {:.2f}, SE opt = {:.2f})".format(
+                self.kappa, se_num[0], se_opt[0])
+        )
+        print("sigma = {:.2f} (SE num = {:.2f}, SE opt = {:.2f})".format(
+            self.sigma, se_num[1], se_opt[1]) 
+        )
+        print("xi = {:.2f} (SE num = {:.2f}, SE opt = {:.2f})".format(
+            self.xi, se_num[2], se_opt[2])
+        )
+        # print("\n===================================")
+    
         
