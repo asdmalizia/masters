@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 import numdifftools as nd
+from scipy.stats import beta
 
 
 class NaveauModelI:
@@ -251,30 +252,203 @@ class NaveauModelI:
     # =====================================================
     # SUMMARY
     # =====================================================
-    def summary(self):
+    def summary(self, print_results=True):
+        
+        se_num, _ = self.standard_errors(method="numerical")
+        results = []
+        
+        upper, lower = self.kappa + 1.96*se_num[0], self.kappa - 1.96*se_num[0]
+        results.append("{:.3f} ({:.2f}, {:.2f})".format(self.kappa, lower, upper))
+        
+        upper, lower = self.sigma + 1.96*se_num[1], self.sigma - 1.96*se_num[1]
+        results.append("{:.3f} ({:.2f}, {:.2f})".format(self.sigma, lower, upper))
+        
+        upper, lower = self.xi + 1.96*se_num[2], self.xi - 1.96*se_num[2]
+        results.append("{:.3f} ({:.2f}, {:.2f})".format(self.xi, lower, upper))
 
-        se_num, _ = self.standard_errors(
-            method="numerical"
-        )
-        se_opt, _ = self.standard_errors(
-            method="optimizer"
+        if print_results:
+            print("kappa = " + results[0])
+            print("sigma = " + results[1])
+            print("xi = " + results[2])
+            
+        return results
+
+
+class NaveauModelIV:
+    """
+    Modelo (iv) de Naveau et al. (2016)
+
+    G(v) = [1 - Q_delta((1-v)^delta)]^(kappa/2)
+
+    onde Q_delta é a CDF da Beta(1/delta, 2).
+    """
+
+    def __init__(self, kappa, delta, sigma, xi):
+
+        if kappa <= 0:
+            raise ValueError("kappa deve ser > 0")
+
+        if delta <= 0:
+            raise ValueError("delta deve ser > 0")
+
+        if sigma <= 0:
+            raise ValueError("sigma deve ser > 0")
+
+        self.kappa = kappa
+        self.delta = delta
+        self.sigma = sigma
+        self.xi = xi
+
+    # =========================================================
+    # Survival da GPD
+    # =========================================================
+    def _Hbar(self, x):
+
+        x = np.asarray(x)
+
+        if np.abs(self.xi) < 1e-10:
+            return np.exp(-x / self.sigma)
+
+        t = 1 + self.xi * x / self.sigma
+
+        Hbar = np.zeros_like(x, dtype=float)
+        Hbar[t > 0] = t[t > 0]**(-1/self.xi)
+
+        return Hbar
+
+    # =========================================================
+    # Densidade da GPD
+    # =========================================================
+    def _h(self, x):
+
+        x = np.asarray(x)
+
+        if np.abs(self.xi) < 1e-10:
+            return np.exp(-x / self.sigma)
+
+        t = 1 + self.xi * x / self.sigma
+
+        h = np.zeros_like(x, dtype=float)
+        h[t > 0] = t[t > 0]**(-1/self.xi - 1)
+
+        return h
+
+    # =========================================================
+    # CDF
+    # =========================================================
+    def cdf(self, x):
+
+        Hbar = self._Hbar(x)
+
+        A = (
+            1
+            - ((1 + self.delta) / self.delta) * Hbar
+            + (1 / self.delta) * Hbar**(1 + self.delta)
         )
 
-        # =================================================
-        # impressão
-        # =================================================
-        # print("\n===================================")
-        # print("Naveau Model I - Fit Summary")
-        # print("===================================\n")
-        print("kappa = {:.2f} (SE num = {:.2f}, SE opt = {:.2f})".format(
-                self.kappa, se_num[0], se_opt[0])
+        A = np.clip(A, 0, 1)
+
+        return A**(self.kappa / 2)
+
+    # =========================================================
+    # PDF
+    # =========================================================
+    def pdf(self, x):
+
+        x = np.asarray(x)
+
+        Hbar = self._Hbar(x)
+        h = self._h(x)
+
+        A = (
+            1
+            - ((1 + self.delta) / self.delta) * Hbar
+            + (1 / self.delta) * Hbar**(1 + self.delta)
         )
-        print("sigma = {:.2f} (SE num = {:.2f}, SE opt = {:.2f})".format(
-            self.sigma, se_num[1], se_opt[1]) 
+
+        A = np.clip(A, 1e-300, None)
+
+        f = (
+            self.kappa
+            * (1 + self.delta)
+            / (2 * self.delta * self.sigma)
+            * h
+            * A**(self.kappa / 2 - 1)
+            * (1 - Hbar**self.delta)
         )
-        print("xi = {:.2f} (SE num = {:.2f}, SE opt = {:.2f})".format(
-            self.xi, se_num[2], se_opt[2])
+
+        return f
+
+    # =========================================================
+    # LOGPDF
+    # =========================================================
+    def logpdf(self, x):
+
+        x = np.asarray(x)
+
+        Hbar = self._Hbar(x)
+        h = self._h(x)
+
+        A = (
+            1
+            - ((1 + self.delta) / self.delta) * Hbar
+            + (1 / self.delta) * Hbar**(1 + self.delta)
         )
-        # print("\n===================================")
+
+        A = np.clip(A, 1e-300, None)
+        h = np.clip(h, 1e-300, None)
+
+        logf = (
+            np.log(self.kappa)
+            + np.log(1 + self.delta)
+            - np.log(2)
+            - np.log(self.delta)
+            - np.log(self.sigma)
+            + (self.kappa / 2 - 1) * np.log(A)
+            + np.log(1 - Hbar**self.delta)
+            + np.log(h)
+        )
+
+        return logf
+
+    # =========================================================
+    # PPF
+    # =========================================================
+    def ppf(self, u):
+
+        u = np.asarray(u)
+
+        eps = np.finfo(float).eps
+        u = np.clip(u, eps, 1 - eps)
+
+        # Quantil Beta(1/delta, 2)
+        z = beta.ppf(
+            1 - u**(2 / self.kappa),
+            a=1/self.delta,
+            b=2
+        )
+
+        Hbar = z**(1/self.delta)
+
+        if np.abs(self.xi) < 1e-10:
+
+            return -self.sigma * np.log(Hbar)
+
+        return (
+            self.sigma / self.xi
+        ) * (
+            Hbar**(-self.xi) - 1
+        )
+
+    # =========================================================
+    # RANDOM SAMPLING
+    # =========================================================
+    def rvs(self, size=1, random_state=None):
+
+        rng = np.random.default_rng(random_state)
+
+        u = rng.uniform(size=size)
+
+        return self.ppf(u)
     
         
