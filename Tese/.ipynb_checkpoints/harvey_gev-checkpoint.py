@@ -42,7 +42,7 @@ def _standardized_residual(y, mu, gamma, varphi):
     """
     return (y - mu - gamma) / varphi
 
-def _xi_t_from_dummies(dummy, xi_seca, xi_cheia):
+def _xi_t_from_dummies(xi_seca, xi_cheia=0, dummy=0):
     """
     Constrói o parâmetro de forma condicional xi_t
     a partir das dummies de seca e cheia.
@@ -50,7 +50,7 @@ def _xi_t_from_dummies(dummy, xi_seca, xi_cheia):
     xi_t = xi_seca + D_cheia * xi_cheia
     """
 
-    dummy = np.asarray(dummy, dtype=float)
+    # dummy = np.asarray(dummy, dtype=float)
 
     return xi_seca + dummy * (xi_cheia - xi_seca)
 
@@ -554,7 +554,7 @@ def initial_seasonal_coefficients(y, period=12, n_harmonics=6):
     X = np.column_stack(X)
 
     coefficients = np.linalg.lstsq(X, y, rcond=None)[0]
-    mu_init = coefficients[0][0]
+    mu_init = coefficients[0]
     alpha = np.asarray(coefficients[1::2]).ravel()
     beta = np.asarray(coefficients[2::2]).ravel()
 
@@ -582,12 +582,12 @@ def filter(y, mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta):
     t = np.arange(1, T + 1)
     
     gamma_t = seasonal_component(t, alpha, beta)
-    xi_t = _xi_t_from_dummies(dummy, xi_seca, xi_cheia)
+    xi_t = _xi_t_from_dummies(xi_seca, xi_cheia, dummy)
 
     c, d = {}, {}
     I = {}
     for xi_value in np.unique(xi_t):
-        if xi_value > 0:
+        if xi_value > 1e-6:
             c[xi_value] = _find_c(xi_value)
             d[xi_value] = _find_d(xi_value)
         I[xi_value] = fisher_information(xi_value, varphi)
@@ -653,7 +653,7 @@ def simulate(mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta, T, 
  
     time = np.arange(1, n + 1)
     gamma = seasonal_component(time, alpha, beta)
-    xi_t = _xi_t_from_dummies(dummy, xi_seca, xi_cheia)
+    xi_t = _xi_t_from_dummies(xi_seca, xi_cheia, dummy)
 
     # Valores de c, d e I para cada xi
     c, d, I = {}, {}, {}
@@ -708,58 +708,73 @@ def loglikelihood(y, mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, b
 
     return np.sum(loglik)
 
-def fit(y, dummy, init_params, method="L-BFGS-B", bounds=None):
-    y = np.asarray(y, dtype=float)
 
-    mu0_init, varphi_init, phi_init, kappa_init, xi_seca_init, xi_cheia_init = init_params[:6]
-    alpha_init, beta_init = init_params[6:12], init_params[12:17]
-    a_init = np.log(phi_init / (1 - phi_init))
-    ratio_init = kappa_init / phi_init
-    b_init = np.log(ratio_init / (1 - ratio_init))
+def fit(y, dummy, init_params, method="L-BFGS-B", bounds=None, xi_mode="seasonal"):
+    y = np.asarray(y, dtype=float)
     
-    def _objective(params):
-        mu0, varphi, a_hat, b_hat, xi_seca, xi_cheia = params[:6]
-        alpha, beta = params[6:12], params[12:17]
-        phi = expit(a_hat)
-        kappa = phi * expit(b_hat)
+    idx_alpha = 5
+    if xi_mode == "seasonal":
+        idx_alpha = 6
+        xi_cheia_init = init_params[5]
+
+    mu0_init, varphi_init, phi_init, kappa_init, xi_seca_init = init_params[:5] 
+    alpha_init = np.asarray(init_params[idx_alpha:idx_alpha+6], dtype=float)
+    beta_init = np.asarray(init_params[idx_alpha+6:], dtype=float)
+
+    x0 = [mu0_init, varphi_init, phi_init, kappa_init, xi_seca_init]
+    default_bounds = [
+        (None, None),  # mu0
+        (1e-8, None),  # varphi > 0
+        (-0.999, 0.999),  # -1 < phi < 1
+        (1e-8, None),  # kappa > 0
+        (1e-8, 0.5)   # xi_seca
+    ]  
+    
+    if xi_mode == "seasonal":
+        default_bounds.append((1e-8, 0.5))    # xi_cheia
+        x0.append(xi_cheia_init)
+                
+    x0 += [*alpha_init, *beta_init]    
+    x0 = np.array(x0, dtype=float)    
+    default_bounds.extend([(None, None)] * 11)  # alpha e beta   
+    if bounds is None:
+        bounds = default_bounds
         
-        ll = loglikelihood(y, mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta)
+    def _objective(params):
+        mu0, varphi, phi, kappa, xi_seca = params[:5]
+        
+        if xi_mode == "seasonal":
+            xi_cheia = params[5]
+            alpha = params[6:12]
+            beta = params[12:17]
+        else:
+            xi_cheia = xi_seca
+            alpha = params[5:11]
+            beta = params[11:16]
+
+        ll = loglikelihood(
+            y, mu0, varphi, phi, kappa,
+            xi_seca, xi_cheia, dummy, alpha, beta
+        )
         if not np.isfinite(ll):
             return 1e100
         return -ll
-    if bounds is None:
-        bounds = [
-            (None, None),   # mu0
-            (1e-8, None),   # varphi > 0
-            (None, None),   # a -> phi
-            (None, None),   # b -> kappa/phi
-            (1e-8, 1/2),     # 0 < xi_seca < 1/2
-            (1e-8, 1/2)     # 0 < xi_cheia < 1/2
-        ]
-        bounds += [(None, None)] * 11  # alpha e beta
 
-    result = minimize(
-        _objective,
-        x0=np.array([mu0_init, varphi_init, a_init, b_init, xi_seca_init, xi_cheia_init, *alpha_init, *beta_init]),
-        method=method,
-        bounds=bounds,
-        options={
-            "maxiter": 10000,
-            "maxfun": 100000,
-            "maxls": 50,
-            "ftol": 1e-15,
-            "gtol": 1e-8,
-            "maxcor": 20
-        }
-    )
+    result = minimize(_objective, x0=x0, method=method, bounds=bounds)
 
-        # recuperar parâmetros no espaço original
-    mu0_hat, varphi_hat, a_hat, b_hat, xi_seca_hat, xi_cheia_hat = result.x[:6]
-    phi_hat = expit(a_hat)
-    kappa_hat = phi_hat * expit(b_hat)
-    alpha_hat = result.x[6:12]
-    beta_hat = result.x[12:17]
+    mu0_hat, varphi_hat, phi_hat, kappa_hat, xi_seca_hat = result.x[:5] 
+    alpha_hat = result.x[idx_alpha:idx_alpha+6]
+    beta_hat = result.x[idx_alpha+6:]
 
-    result.params_original = np.array([mu0_hat, varphi_hat, phi_hat, kappa_hat, xi_seca_hat, xi_cheia_hat, *alpha_hat, *beta_hat])
+    if xi_mode == "seasonal":
+        xi_cheia_hat = result.x[5]
+    elif xi_mode == "constant":
+        xi_cheia_hat = xi_seca_hat
+
+    result.params_original = np.array([
+        mu0_hat, varphi_hat, phi_hat, kappa_hat,
+        xi_seca_hat, xi_cheia_hat,
+        *alpha_hat, *beta_hat
+    ])
     return result
     
