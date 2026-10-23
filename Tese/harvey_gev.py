@@ -42,17 +42,19 @@ def _standardized_residual(y, mu, gamma, varphi):
     """
     return (y - mu - gamma) / varphi
 
-def _xi_t_from_dummies(xi_seca, xi_cheia=0, dummy=0):
+def _xi_t_from_dummies(xi_seca, xi_cheia, dummy):
     """
     Constrói o parâmetro de forma condicional xi_t
     a partir das dummies de seca e cheia.
 
     xi_t = xi_seca + D_cheia * xi_cheia
     """
-
-    # dummy = np.asarray(dummy, dtype=float)
-
+    dummy = np.asarray(dummy, dtype=float)
     return xi_seca + dummy * (xi_cheia - xi_seca)
+
+def _varphi_t_from_dummies(varphi_seca, varphi_cheia, dummy):
+    dummy = np.asarray(dummy, dtype=float)
+    return varphi_seca + dummy * (varphi_cheia - varphi_seca)
 
 def pdf(y, mu, varphi, xi, gamma=0):
     """
@@ -64,31 +66,6 @@ def pdf(y, mu, varphi, xi, gamma=0):
         Densidade condicional.
     """
     return np.exp(logpdf(y, mu, varphi, xi, gamma))
-    
-    # t = np.arange(1, len(y) + 1)
-    # x = _standardized_residual(y, mu, gamma, varphi)
-
-    # if xi != 0:
-    #     z = 1 + xi * x
-
-    #     if np.any(z <= 0):
-    #         return 0.0
-
-    #     return (
-    #         (1 / varphi)
-    #         * z ** (-1 - 1 / xi)
-    #         * np.exp(-z ** (-1 / xi))
-    #     )
-
-    # else:
-    #     return (
-    #         (1 / varphi)
-    #         * np.exp(-x)
-    #         * np.exp(-np.exp(-x))
-    #     )
-
-
-import numpy as np
 
 def cdf(y, mu, varphi, xi, gamma=0):
     """
@@ -100,18 +77,19 @@ def cdf(y, mu, varphi, xi, gamma=0):
     float ou np.ndarray
         Probabilidade acumulada condicional.
     """
-    if not np.isfinite(varphi) or varphi <= 0:
-        raise ValueError("varphi deve ser positivo e finito.")
 
-    y, mu, xi, gamma = np.broadcast_arrays(
+    y, mu, varphi, xi, gamma = np.broadcast_arrays(
         np.asarray(y, dtype=float),
         np.asarray(mu, dtype=float),
+        np.asarray(varphi, dtype=float),
         np.asarray(xi, dtype=float),
         np.asarray(gamma, dtype=float)
     )
+    if np.any(~np.isfinite(varphi)) or np.any(varphi <= 0):
+        raise ValueError("varphi deve ser positivo e finito.")
 
     # Resíduo padronizado
-    x = (y - mu - gamma) / varphi
+    x = _standardized_residual(y, mu, gamma, varphi)
     z = 1 + xi * x
 
     F = np.empty_like(x, dtype=float)
@@ -127,15 +105,9 @@ def cdf(y, mu, varphi, xi, gamma=0):
     F[valid] = np.exp(
         -np.exp(-np.log(z[valid]) / xi[valid])
     )
-
     # Fora do suporte da GEV
-    below = mask1 & (z <= 0) & (xi > 0)
-    above = mask1 & (z <= 0) & (xi < 0)
-
-    F[below] = 0.0
-    F[above] = 1.0
-
-    # return F.item() if F.ndim == 0 else F
+    F[mask1 & (z <= 0) & (xi > 0)] = 0.0
+    F[ mask1 & (z <= 0) & (xi < 0)] = 1.0
     return F
 
 def ppf(p, mu, varphi, xi, gamma=0):
@@ -148,15 +120,17 @@ def ppf(p, mu, varphi, xi, gamma=0):
     float ou np.ndarray
         Quantil condicional na escala original de y_t.
     """
-    if not np.isfinite(varphi) or varphi <= 0:
-        raise ValueError("varphi deve ser positivo e finito.")
 
-    p, mu, xi, gamma = np.broadcast_arrays(
+    p, mu, varphi, xi, gamma = np.broadcast_arrays(
         np.asarray(p, dtype=float),
         np.asarray(mu, dtype=float),
+        np.asarray(varphi, dtype=float),
         np.asarray(xi, dtype=float),
         np.asarray(gamma, dtype=float)
     )
+
+    if np.any(~np.isfinite(varphi)) or np.any(varphi <= 0):
+        raise ValueError("varphi deve ser positivo e finito.")
 
     if np.any((p <= 0) | (p >= 1)):
         raise ValueError("p deve estar estritamente entre 0 e 1.")
@@ -175,8 +149,6 @@ def ppf(p, mu, varphi, xi, gamma=0):
     )
 
     result = mu + gamma + varphi * q
-
-    # return result.item() if result.ndim == 0 else result
     return result
 
 def conditional_mean(mu, varphi, xi, gamma=0):
@@ -255,9 +227,10 @@ def logpdf(y, mu, varphi, xi, gamma=0):
     log_p : float or np.ndarray
         Log-densidade condicional.
     """
-    y, mu, xi, gamma = np.broadcast_arrays(
+    y, mu, varphi, xi, gamma = np.broadcast_arrays(
         np.asarray(y, dtype=float),
         np.asarray(mu, dtype=float),
+        np.asarray(varphi, dtype=float),
         np.asarray(xi, dtype=float),
         np.asarray(gamma, dtype=float)
     )
@@ -267,15 +240,10 @@ def logpdf(y, mu, varphi, xi, gamma=0):
     
     # caso Gumbel
     mask0 = np.abs(xi) < 1e-6
-    x0 = x[mask0]
-    lp0 = np.full_like(x0, -np.inf)
-    safe = x0 > -700
-    lp0[safe] = (
-        -np.log(varphi)
-        - x0[safe]
-        - np.exp(-x0[safe])
+    safe = mask0 & (x > -700)
+    log_p[safe] = (
+        -np.log(varphi[safe]) - x[safe] - np.exp(-x[safe])
     )
-    log_p[mask0] = lp0
     
     # caso Frechet
     mask1 = ~mask0
@@ -283,7 +251,7 @@ def logpdf(y, mu, varphi, xi, gamma=0):
     valid = mask1 & (z > 0)
     
     log_p[valid] = (
-        -np.log(varphi)
+        -np.log(varphi[valid])
         - (
             1 + 1 / xi[valid]
           ) * np.log(z[valid])
@@ -306,9 +274,10 @@ def score(y, xi, mu=0, gamma=0, varphi=1):
     """
     # y = np.asarray(y, dtype=float)
     # xi = np.asarray(xi, dtype=float)
-    y, xi, mu, gamma = np.broadcast_arrays(
+    y, xi, varphi, mu, gamma = np.broadcast_arrays(
         np.asarray(y, dtype=float),
         np.asarray(xi, dtype=float),
+        np.asarray(varphi, dtype=float),
         np.asarray(mu, dtype=float),
         np.asarray(gamma, dtype=float)
     )
@@ -319,7 +288,7 @@ def score(y, xi, mu=0, gamma=0, varphi=1):
     # caso Gumbel
     mask0 = np.abs(xi) < 1e-6
     result[mask0] = (
-        1 / varphi
+        1 / varphi[mask0]
         * (1 - np.exp(-x[mask0]))
     )
     
@@ -329,7 +298,7 @@ def score(y, xi, mu=0, gamma=0, varphi=1):
     
     valid = mask1 & (z > 0)
     result[valid] = (
-        1 / varphi
+        1 / varphi[valid]
         * (
             (1 + xi[valid]) / z[valid]
             - np.exp(
@@ -351,17 +320,20 @@ def fisher_information(xi, varphi=1):
         Informação de Fisher para mu_{t|t-1}.
     """
     
-    xi = np.asarray(xi, dtype=float)
+    xi, varphi = np.broadcast_arrays(
+        np.asarray(xi, dtype=float),
+        np.asarray(varphi, dtype=float)
+    )
     I = np.empty_like(xi, dtype=float)
 
     mask0 = np.abs(xi) < 1e-6
-    I[mask0] = 1 / varphi ** 2
+    I[mask0] = 1 / varphi[mask0] ** 2
     
     mask1 = ~mask0
     I[mask1] = (
             (1 + xi[mask1]) ** 2
             * gamma_func(1 + 2 * xi[mask1])
-            / varphi ** 2
+            / varphi[mask1] ** 2
         )
 
     return I
@@ -465,63 +437,62 @@ def composite_score(y, xi, mu=0, gamma=0, varphi=1, c={}, d={}, I={}):
     """
     # y = np.asarray(y, dtype=float)
     # xi = np.asarray(xi, dtype=float)
-    y, xi, mu, gamma = (
-        a.ravel() for a in (y, xi, mu, gamma)
+    y, xi, mu, varphi, gamma = (
+        a.ravel() for a in (y, xi, mu, varphi, gamma)
     )
     x = _standardized_residual(y, mu, gamma, varphi)
 
-    s_composite = np.empty_like(x, dtype=float)
-    
-    # Caso Gumbel
-    mask0 = np.abs(xi) < 1e-6
-    x0 = x[mask0]
-    s0 = x0.copy()
-    s0[x0 > 0] = varphi * (1 - np.exp(-x0[x0 > 0]))
-    s_composite[mask0] = s0
+    # s_composite = np.empty_like(x, dtype=float)
+    s_composite = np.full_like(x, np.nan, dtype=float)
 
-    # Caso Fréchet
-    mask1 = ~mask0
+    for i in range(len(y)):
+        xi_i = xi[i]
+        varphi_i = varphi[i]
+        x_i = x[i]
 
-    s_f = np.empty_like(xi[mask1], dtype=float)
-    for xi_value in np.unique(xi[mask1]):
+        if not np.isfinite(varphi_i) or varphi_i <= 0:
+            continue
 
-        idx = mask1 & (xi == xi_value)
-        x_i = x[idx]
+        # Caso Gumbel: preserva a regra da implementação original
+        if abs(xi_i) < 1e-6:
+            s_composite[i] = x_i
+            if x_i > 0:
+                s_composite[i] = varphi_i * (1 - np.exp(-x_i))
+            continue
 
-        if xi_value not in c: 
-            c[xi_value] = _find_c(xi_value) 
-        if xi_value not in d: 
-            d[xi_value] = _find_d(xi_value)
-        if xi_value not in I: 
-            I[xi_value] = fisher_information(xi_value, varphi)
-            
-        s_temp = np.empty_like(np.asarray(x_i, dtype=float))
-        lower = x_i <= c[xi_value]
-        middle = (x_i > c[xi_value]) & (x_i <= d[xi_value])
-        upper = x_i > d[xi_value]
-        
-        # região inferior
-        s_temp[lower] = x_i[lower] - c[xi_value]
-        
-        # região intermediária
-        if np.any(middle):
-            s = score(
-                y[idx][middle], xi_value,
-                mu[idx][middle], gamma[idx][middle], varphi
+        z_i = 1 + xi_i * x_i
+        if z_i <= 0:
+            continue
+
+        if xi_i not in c:
+            c[xi_i] = _find_c(xi_i)
+        if xi_i not in d:
+            d[xi_i] = _find_d(xi_i)
+
+        key_I = (float(xi_i), float(varphi_i))
+        if key_I not in I:
+            I[key_I] = float(fisher_information(xi_i, varphi_i))
+
+        c_i = c[xi_i]
+        d_i = d[xi_i]
+        I_i = I[key_I]
+
+        if x_i <= c_i:
+            s_composite[i] = x_i - c_i
+
+        elif x_i <= d_i:
+            s_i = score(
+                y[i], xi_i, mu[i], gamma[i], varphi_i
             )
-            s_temp[middle] = np.asarray(s).reshape(-1)  / I[xi_value] 
+            s_composite[i] = float(s_i) / I_i
 
-        # região superior
-        if np.any(upper):
+        else:
             s_d = score(
-                mu[idx][upper] + gamma[idx][upper] + varphi * d[xi_value], 
-                xi_value, mu[idx][upper], gamma[idx][upper], varphi
+                mu[i] + gamma[i] + varphi_i * d_i,
+                xi_i, mu[i], gamma[i], varphi_i
             )
-            s_temp[upper] = np.asarray(s_d).reshape(-1) / I[xi_value]
+            s_composite[i] = float(s_d) / I_i
 
-        s_f[idx] = s_temp
-    
-    s_composite[mask1] = s_f
     return s_composite
 
 
@@ -560,7 +531,8 @@ def initial_seasonal_coefficients(y, period=12, n_harmonics=6):
 
     return mu_init, alpha, beta
 
-def filter(y, mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta):
+def filter(y, mu0, varphi_seca, varphi_cheia, phi, kappa, 
+    xi_seca, xi_cheia, dummy, alpha, beta):
     """
     Filtro score-driven do modelo de Harvey com composite score e sazonalidade.
 
@@ -575,28 +547,30 @@ def filter(y, mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta):
     """
     y = np.asarray(y, dtype=float)
     T = len(y)
-    
-    mu_filtered = np.empty(T)
-    x = np.empty(T)
-    s = np.empty(T)
-    t = np.arange(1, T + 1)
-    
-    gamma_t = seasonal_component(t, alpha, beta)
+
+    time = np.arange(1, T + 1)
+    gamma_t = seasonal_component(time, alpha, beta)
+    varphi_t = _varphi_t_from_dummies(varphi_seca, varphi_cheia, dummy)
     xi_t = _xi_t_from_dummies(xi_seca, xi_cheia, dummy)
 
     c, d = {}, {}
     I = {}
-    for xi_value in np.unique(xi_t):
+    for (xi_value, varphi_value) in [(xi_seca, varphi_seca), (xi_cheia, varphi_cheia)]:
         if xi_value > 1e-6:
             c[xi_value] = _find_c(xi_value)
             d[xi_value] = _find_d(xi_value)
-        I[xi_value] = fisher_information(xi_value, varphi)
+        I[xi_value] = fisher_information(xi_value, varphi_value)
+    
+        
+    mu_filtered = np.empty(T)
+    x = np.empty(T)
+    s = np.empty(T)
     
     mu_filtered[0] = mu0
     for t in range(T):
 
-        x[t] = _standardized_residual(y[t], mu_filtered[t], gamma_t[t], varphi)
-        s[t] = composite_score(y[t], xi_t[t], mu_filtered[t], gamma_t[t], varphi, c, d, I)
+        x[t] = _standardized_residual(y[t], mu_filtered[t], gamma_t[t], varphi_t[t])
+        s[t] = composite_score(y[t], xi_t[t], mu_filtered[t], gamma_t[t], varphi_t[t], c, d, I)
 
         # Atualização do estado
         if t < T - 1:
@@ -606,9 +580,10 @@ def filter(y, mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta):
                 + kappa * s[t]
             )
 
-    return mu_filtered, gamma_t, x, s, xi_t
+    return mu_filtered, gamma_t, x, s, xi_t, varphi_t
 
-def simulate(mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta, T, burn_in=0, seed=None):
+def simulate(mu0, varphi_seca, varphi_cheia, phi, kappa, xi_seca, xi_cheia, 
+             dummy, alpha, beta, T, burn_in=0, seed=None):
     """
     Simula uma série do modelo de Harvey com composite score.
 
@@ -633,7 +608,7 @@ def simulate(mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta, T, 
         Composite scores.
     """
 
-    if varphi <= 0:
+    if varphi_seca <= 0 or varphi_cheia <= 0:
         raise ValueError("varphi deve ser maior que zero.")
 
     if abs(phi) >= 1:
@@ -653,27 +628,27 @@ def simulate(mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta, T, 
  
     time = np.arange(1, n + 1)
     gamma = seasonal_component(time, alpha, beta)
+    varphi_t = _varphi_t_from_dummies(varphi_seca, varphi_cheia, dummy)
     xi_t = _xi_t_from_dummies(xi_seca, xi_cheia, dummy)
 
     # Valores de c, d e I para cada xi
     c, d, I = {}, {}, {}
-    for xi_value in np.unique(xi_t):
+    for (xi_value, varphi_value) in [(xi_seca, varphi_seca), (xi_cheia, varphi_cheia)]:
         c[xi_value] = None
         d[xi_value] = None
         
-        if xi_value > 0:
+        if xi_value > 1e-6:
             c[xi_value] = _find_c(xi_value)
             d[xi_value] = _find_d(xi_value)
-            
-        I[xi_value] = fisher_information(xi_value, varphi)
+        I[xi_value] = fisher_information(xi_value, varphi_value)
 
     # filtro
     mu_filtered[0] = mu0    
     for t in range(n):
 
         epsilon[t] = genextreme.rvs(c=-xi_t[t], loc=0, scale=1, random_state=rng)
-        y[t] = mu_filtered[t] + gamma[t] + varphi * epsilon[t]
-        s[t] = composite_score(y[t], xi_t[t], mu_filtered[t], gamma[t], varphi, c, d, I)
+        y[t] = mu_filtered[t] + gamma[t] + varphi_t[t] * epsilon[t]
+        s[t] = composite_score(y[t], xi_t[t], mu_filtered[t], gamma[t], varphi_t[t], c, d, I)
 
         if t < n - 1:
             mu_filtered[t + 1] = (
@@ -690,17 +665,19 @@ def simulate(mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta, T, 
         epsilon = epsilon[burn_in:]
         s = s[burn_in:]
         xi_t = xi_t[burn_in:]
+        varphi_t = varphi_t[burn_in:]
 
-    return y, mu_filtered, gamma, epsilon, s, xi_t
+    return y, mu_filtered, gamma, epsilon, s, xi_t, varphi_t
 
-def loglikelihood(y, mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta):
+def loglikelihood(y, mu0, varphi_seca, varphi_cheia, 
+                  phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta):
     y = np.asarray(y, dtype=float)
 
     # Filtragem
-    mu_filtered, gamma, x, s, xi_t = filter(y, mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta)
+    mu_filtered, gamma, x, s, xi_t, varphi_t = filter(y, mu0, varphi_seca, varphi_cheia, phi, kappa, xi_seca, xi_cheia, dummy, alpha, beta)
 
     # Log-verossimilhança de cada observação
-    loglik = logpdf(y, mu_filtered, varphi, xi_t, gamma)
+    loglik = logpdf(y, mu_filtered, varphi_t, xi_t, gamma)
 
     # Se alguma observação estiver fora do suporte
     if np.any(~np.isfinite(loglik)):
@@ -708,20 +685,53 @@ def loglikelihood(y, mu0, varphi, phi, kappa, xi_seca, xi_cheia, dummy, alpha, b
 
     return np.sum(loglik)
 
+def _unpack(params, xi_mode, varphi_mode):
+    # Parâmetros sempre na ordem em que são otimizados
+    pos = 0
+    mu0 = params[pos]; pos += 1
+    varphi_seca = params[pos]; pos += 1
+    phi = params[pos]; pos += 1
+    kappa = params[pos]; pos += 1
+    xi_seca = params[pos]; pos += 1
 
-def fit(y, dummy, init_params, method="L-BFGS-B", bounds=None, xi_mode="seasonal"):
+    if varphi_mode == "seasonal":
+        varphi_cheia = params[pos]
+        pos += 1
+    else:
+        varphi_cheia = varphi_seca
+
+    if xi_mode == "seasonal":
+        xi_cheia = params[pos]
+        pos += 1
+    else:
+        xi_cheia = xi_seca
+
+    alpha = params[pos:pos + 6]
+    pos += 6
+    beta = params[pos:pos + 5]
+
+    return (
+        mu0, varphi_seca, varphi_cheia, phi, kappa,
+        xi_seca, xi_cheia, alpha, beta
+    )
+
+def fit(y, dummy, init_params, method="L-BFGS-B", bounds=None, 
+        xi_mode="seasonal", varphi_mode="seasonal",):
+    
     y = np.asarray(y, dtype=float)
     
-    idx_alpha = 5
-    if xi_mode == "seasonal":
-        idx_alpha = 6
-        xi_cheia_init = init_params[5]
+    # Ordem fixa do vetor inicial:
+    # mu0, varphi_seca, varphi_cheia, phi, kappa,
+    # xi_seca, xi_cheia, alpha[6], beta[5]
+    (
+        mu0_init, varphi_seca_init, varphi_cheia_init,
+        phi_init, kappa_init, xi_seca_init, xi_cheia_init
+    ) = init_params[:7]
 
-    mu0_init, varphi_init, phi_init, kappa_init, xi_seca_init = init_params[:5] 
-    alpha_init = np.asarray(init_params[idx_alpha:idx_alpha+6], dtype=float)
-    beta_init = np.asarray(init_params[idx_alpha+6:], dtype=float)
+    alpha_init = init_params[7:13]
+    beta_init = init_params[13:18]
 
-    x0 = [mu0_init, varphi_init, phi_init, kappa_init, xi_seca_init]
+    x0 = [mu0_init, varphi_seca_init, phi_init, kappa_init, xi_seca_init]
     default_bounds = [
         (None, None),  # mu0
         (1e-8, None),  # varphi > 0
@@ -729,10 +739,13 @@ def fit(y, dummy, init_params, method="L-BFGS-B", bounds=None, xi_mode="seasonal
         (1e-8, None),  # kappa > 0
         (1e-8, 0.5)   # xi_seca
     ]  
-    
+ 
+    if varphi_mode == "seasonal":
+        x0.append(varphi_cheia_init)
+        default_bounds.append((1e-8, None))  # varphi_cheia > 0 
     if xi_mode == "seasonal":
-        default_bounds.append((1e-8, 0.5))    # xi_cheia
         x0.append(xi_cheia_init)
+        default_bounds.append((1e-8, 0.5))    # xi_cheia
                 
     x0 += [*alpha_init, *beta_init]    
     x0 = np.array(x0, dtype=float)    
@@ -741,19 +754,13 @@ def fit(y, dummy, init_params, method="L-BFGS-B", bounds=None, xi_mode="seasonal
         bounds = default_bounds
         
     def _objective(params):
-        mu0, varphi, phi, kappa, xi_seca = params[:5]
-        
-        if xi_mode == "seasonal":
-            xi_cheia = params[5]
-            alpha = params[6:12]
-            beta = params[12:17]
-        else:
-            xi_cheia = xi_seca
-            alpha = params[5:11]
-            beta = params[11:16]
+        (
+            mu0, varphi_seca, varphi_cheia, phi, kappa,
+            xi_seca, xi_cheia, alpha, beta
+        ) = _unpack(params, xi_mode, varphi_mode)
 
         ll = loglikelihood(
-            y, mu0, varphi, phi, kappa,
+            y, mu0, varphi_seca, varphi_cheia, phi, kappa,
             xi_seca, xi_cheia, dummy, alpha, beta
         )
         if not np.isfinite(ll):
@@ -762,19 +769,26 @@ def fit(y, dummy, init_params, method="L-BFGS-B", bounds=None, xi_mode="seasonal
 
     result = minimize(_objective, x0=x0, method=method, bounds=bounds)
 
-    mu0_hat, varphi_hat, phi_hat, kappa_hat, xi_seca_hat = result.x[:5] 
-    alpha_hat = result.x[idx_alpha:idx_alpha+6]
-    beta_hat = result.x[idx_alpha+6:]
+    (
+        mu0_hat, varphi_seca_hat, varphi_cheia_hat, phi_hat, kappa_hat,
+        xi_seca_hat, xi_cheia_hat, alpha_hat, beta_hat
+    ) = _unpack(result.x, xi_mode, varphi_mode)
 
-    if xi_mode == "seasonal":
-        xi_cheia_hat = result.x[5]
-    elif xi_mode == "constant":
-        xi_cheia_hat = xi_seca_hat
 
     result.params_original = np.array([
-        mu0_hat, varphi_hat, phi_hat, kappa_hat,
+        mu0_hat, varphi_seca_hat, varphi_cheia_hat, 
+        phi_hat, kappa_hat,
         xi_seca_hat, xi_cheia_hat,
         *alpha_hat, *beta_hat
     ])
+    result.param_names = [
+        "mu0", "varphi_seca", "varphi_cheia", "phi", "kappa",
+        "xi_seca", "xi_cheia",
+        "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6",
+        "beta1", "beta2", "beta3", "beta4", "beta5"
+    ]
+
+    result.xi_mode = xi_mode
+    result.varphi_mode = varphi_mode
     return result
     

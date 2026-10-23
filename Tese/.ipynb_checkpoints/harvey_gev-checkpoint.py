@@ -42,17 +42,19 @@ def _standardized_residual(y, mu, gamma, varphi):
     """
     return (y - mu - gamma) / varphi
 
-def _xi_t_from_dummies(xi_seca, xi_cheia=0, dummy=0):
+def _xi_t_from_dummies(xi_seca, xi_cheia, dummy):
     """
     Constrói o parâmetro de forma condicional xi_t
     a partir das dummies de seca e cheia.
 
     xi_t = xi_seca + D_cheia * xi_cheia
     """
-
-    # dummy = np.asarray(dummy, dtype=float)
-
+    dummy = np.asarray(dummy, dtype=float)
     return xi_seca + dummy * (xi_cheia - xi_seca)
+
+def _varphi_t_from_dummies(varphi_seca, varphi_cheia, dummy):
+    dummy = np.asarray(dummy, dtype=float)
+    return varphi_seca + dummy * (varphi_cheia - varphi_seca)
 
 def pdf(y, mu, varphi, xi, gamma=0):
     """
@@ -64,31 +66,6 @@ def pdf(y, mu, varphi, xi, gamma=0):
         Densidade condicional.
     """
     return np.exp(logpdf(y, mu, varphi, xi, gamma))
-    
-    # t = np.arange(1, len(y) + 1)
-    # x = _standardized_residual(y, mu, gamma, varphi)
-
-    # if xi != 0:
-    #     z = 1 + xi * x
-
-    #     if np.any(z <= 0):
-    #         return 0.0
-
-    #     return (
-    #         (1 / varphi)
-    #         * z ** (-1 - 1 / xi)
-    #         * np.exp(-z ** (-1 / xi))
-    #     )
-
-    # else:
-    #     return (
-    #         (1 / varphi)
-    #         * np.exp(-x)
-    #         * np.exp(-np.exp(-x))
-    #     )
-
-
-import numpy as np
 
 def cdf(y, mu, varphi, xi, gamma=0):
     """
@@ -106,12 +83,13 @@ def cdf(y, mu, varphi, xi, gamma=0):
     y, mu, xi, gamma = np.broadcast_arrays(
         np.asarray(y, dtype=float),
         np.asarray(mu, dtype=float),
+        np.asarray(varphi, dtype=float),
         np.asarray(xi, dtype=float),
         np.asarray(gamma, dtype=float)
     )
 
     # Resíduo padronizado
-    x = (y - mu - gamma) / varphi
+    x = _standardized_residual(y, mu, gamma, varphi)
     z = 1 + xi * x
 
     F = np.empty_like(x, dtype=float)
