@@ -455,7 +455,7 @@ def composite_score(y, xi, mu=0, gamma=0, varphi=1, c={}, d={}, I={}):
 
         # Caso Gumbel: preserva a regra da implementação original
         if abs(xi_i) < 1e-6:
-            s_composite[i] = x_i
+            s_composite[i] = varphi_i * x_i
             if x_i > 0:
                 s_composite[i] = varphi_i * (1 - np.exp(-x_i))
             continue
@@ -478,7 +478,7 @@ def composite_score(y, xi, mu=0, gamma=0, varphi=1, c={}, d={}, I={}):
         I_i = I[key_I]
 
         if x_i <= c_i:
-            s_composite[i] = x_i - c_i
+            s_composite[i] = varphi_i * (x_i - c_i)
 
         elif x_i <= d_i:
             s_i = score(
