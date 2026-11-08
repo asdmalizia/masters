@@ -218,6 +218,61 @@ def conditional_variance(varphi, xi):
     )
     return variance
 
+
+def conditional_median(mu, varphi, xi, gamma):
+    mu, gamma, varphi, xi = np.broadcast_arrays(
+        np.asarray(mu, dtype=float),
+        np.asarray(gamma, dtype=float),
+        np.asarray(varphi, dtype=float),
+        np.asarray(xi, dtype=float)
+    )
+
+    result = np.empty_like(mu)
+    mask0 = np.abs(xi) < 1e-6
+
+    result[mask0] = (
+        mu[mask0] + gamma[mask0]
+        - varphi[mask0] * np.log(-np.log(0.5))
+    )
+
+    mask1 = ~mask0
+    result[mask1] = (
+        mu[mask1] + gamma[mask1]
+        + varphi[mask1] * (
+            np.exp(-xi[mask1] * np.log(-np.log(0.5))) - 1
+        ) / xi[mask1]
+    )
+
+    return result
+
+
+def conditional_mode(mu, varphi, xi, gamma):
+    mu, gamma, varphi, xi = np.broadcast_arrays(
+        np.asarray(mu, dtype=float),
+        np.asarray(gamma, dtype=float),
+        np.asarray(varphi, dtype=float),
+        np.asarray(xi, dtype=float)
+    )
+
+    if np.any(xi <= -1):
+        raise ValueError("A fórmula da moda interior requer xi > -1.")
+
+    result = np.empty_like(mu)
+    mask0 = np.abs(xi) < 1e-6
+
+    result[mask0] = mu[mask0] + gamma[mask0]
+
+    mask1 = ~mask0
+    result[mask1] = (
+        mu[mask1] + gamma[mask1]
+        + varphi[mask1] * (
+            np.exp(-xi[mask1] * np.log1p(xi[mask1])) - 1
+        ) / xi[mask1]
+    )
+
+    return result
+
+
 def logpdf(y, mu, varphi, xi, gamma=0):
     """
     Log-densidade GEV condicional.
@@ -338,28 +393,43 @@ def fisher_information(xi, varphi=1):
 
     return I
 
+# def score_derivative(x, xi):
+#     """
+#     Derivada do score padronizado em relação a x (resíduo padronizado).
+
+#     Returns
+#     -------
+#     derivative : float or np.ndarray
+#         Derivada s'(x_t).
+#     """
+#     z = 1 + xi * x
+
+#     if np.any(z <= 0):
+#         return np.nan
+
+#     return (
+#         -1 / (
+#             (1 + xi) * gamma_func(1 + 2 * xi)
+#         )
+#         * (
+#             xi / z**2 - 1 / z**(2 + 1 / xi)
+#         )
+#     )
+
 def score_derivative(x, xi):
-    """
-    Derivada do score padronizado em relação a x (resíduo padronizado).
+    x, xi = np.broadcast_arrays(np.asarray(x, dtype=float), np.asarray(xi, dtype=float))
+    out = np.full(x.shape, np.nan)
+    gumbel = np.isclose(xi, 0)
+    out[gumbel] = np.exp(-x[gumbel])
 
-    Returns
-    -------
-    derivative : float or np.ndarray
-        Derivada s'(x_t).
-    """
-    z = 1 + xi * x
-
-    if np.any(z <= 0):
-        return np.nan
-
-    return (
-        -1 / (
-            (1 + xi) * gamma_func(1 + 2 * xi)
-        )
-        * (
-            xi / z**2 - 1 / z**(2 + 1 / xi)
-        )
+    valid = (~gumbel) & (1 + xi * x > 0)
+    z = 1 + xi[valid] * x[valid]
+    out[valid] = -1 / (
+        (1 + xi[valid]) * gamma_func(1 + 2 * xi[valid])
+    ) * (
+        xi[valid] / z**2 - 1 / z**(2 + 1 / xi[valid])
     )
+    return out
 
 
 def _find_c(xi):
@@ -372,9 +442,10 @@ def _find_c(xi):
     #     raise ValueError("find_c requer 0 < xi < 1.")
 
     def objective(x):
-        return score_derivative(x, xi) - 1
-    # lower, upper = -1 / xi + 1e-10, 1e-10
-    return brentq(objective, -0.5, 0)
+        return score_derivative(x, xi) - 2
+    lower, upper = -1 / xi + 1e-10, 1e-10
+    # return brentq(objective, -0.5, 0)
+    return brentq(objective, lower, upper)
 
 # def _find_d(xi):
 #     """
@@ -453,10 +524,12 @@ def composite_score(y, xi, mu=0, gamma=0, varphi=1, c={}, d={}, I={}):
         if not np.isfinite(varphi_i) or varphi_i <= 0:
             continue
 
-        # Caso Gumbel: preserva a regra da implementação original
+        # Caso Gumbel
         if abs(xi_i) < 1e-6:
-            s_composite[i] = varphi_i * x_i
-            if x_i > 0:
+            # score modificado
+            if x_i <= -np.log(2):
+                s_composite[i] = varphi_i * (x_i + np.log(2) - 1)
+            else:
                 s_composite[i] = varphi_i * (1 - np.exp(-x_i))
             continue
 
@@ -469,16 +542,18 @@ def composite_score(y, xi, mu=0, gamma=0, varphi=1, c={}, d={}, I={}):
         if xi_i not in d:
             d[xi_i] = _find_d(xi_i)
 
-        key_I = (float(xi_i), float(varphi_i))
-        if key_I not in I:
-            I[key_I] = float(fisher_information(xi_i, varphi_i))
+        # key_I = (float(xi_i), float(varphi_i))
+        if xi_i not in I:
+            I[xi_i] = float(fisher_information(xi_i, varphi_i))
 
         c_i = c[xi_i]
         d_i = d[xi_i]
-        I_i = I[key_I]
+        I_i = I[xi_i]
 
         if x_i <= c_i:
-            s_composite[i] = varphi_i * (x_i - c_i)
+            # s_composite[i] = varphi_i * (x_i - c_i)
+            s_c = score(mu[i] + gamma[i] + varphi_i * c_i, xi_i, mu[i], gamma[i], varphi_i) / I_i
+            s_composite[i] = s_c + varphi_i * (x_i - c_i)
 
         elif x_i <= d_i:
             s_i = score(
@@ -552,7 +627,8 @@ def filter(y, mu0, varphi_seca, varphi_cheia, phi, kappa,
     gamma_t = seasonal_component(time, alpha, beta)
     varphi_t = _varphi_t_from_dummies(varphi_seca, varphi_cheia, dummy)
     xi_t = _xi_t_from_dummies(xi_seca, xi_cheia, dummy)
-
+    I_t = fisher_information(xi_t, varphi_t)
+    
     c, d = {}, {}
     I = {}
     for (xi_value, varphi_value) in [(xi_seca, varphi_seca), (xi_cheia, varphi_cheia)]:
@@ -566,23 +642,24 @@ def filter(y, mu0, varphi_seca, varphi_cheia, phi, kappa,
     x = np.empty(T)
     s = np.empty(T)
     
-    mu_filtered[0] = mu0
+    mu_filtered[0] = mu0 #omega / (1 - phi)
     for t in range(T):
 
         x[t] = _standardized_residual(y[t], mu_filtered[t], gamma_t[t], varphi_t[t])
-        s[t] = composite_score(y[t], xi_t[t], mu_filtered[t], gamma_t[t], varphi_t[t], c, d, I)
+        # s[t] = composite_score(y[t], xi_t[t], mu_filtered[t], gamma_t[t], varphi_t[t], c, d, I)
+        s[t] = score(y[t], xi_t[t], mu_filtered[t], gamma_t[t], varphi_t[t]) / I_t[t] 
 
         # Atualização do estado
         if t < T - 1:
             mu_filtered[t + 1] = (
-                mu0 * (1 - phi)
+                mu0 * (1 - phi) # omega
                 + phi * mu_filtered[t]
                 + kappa * s[t]
             )
 
     return mu_filtered, gamma_t, x, s, xi_t, varphi_t
 
-def simulate(mu0, varphi_seca, varphi_cheia, phi, kappa, xi_seca, xi_cheia, 
+def simulate(omega, varphi_seca, varphi_cheia, phi, kappa, xi_seca, xi_cheia, 
              dummy, alpha, beta, T, burn_in=0, seed=None):
     """
     Simula uma série do modelo de Harvey com composite score.
@@ -643,7 +720,7 @@ def simulate(mu0, varphi_seca, varphi_cheia, phi, kappa, xi_seca, xi_cheia,
         I[xi_value] = fisher_information(xi_value, varphi_value)
 
     # filtro
-    mu_filtered[0] = mu0    
+    mu_filtered[0] = omega / (1 - phi) #mu0    
     for t in range(n):
 
         epsilon[t] = genextreme.rvs(c=-xi_t[t], loc=0, scale=1, random_state=rng)
@@ -652,7 +729,7 @@ def simulate(mu0, varphi_seca, varphi_cheia, phi, kappa, xi_seca, xi_cheia,
 
         if t < n - 1:
             mu_filtered[t + 1] = (
-                mu0 * (1 - phi)
+                omega # mu0 * (1 - phi)
                 + phi * mu_filtered[t]
                 + kappa * s[t]
             )
